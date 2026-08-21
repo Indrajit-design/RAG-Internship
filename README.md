@@ -1,82 +1,112 @@
-# 🎓 Student Management RAG Assistant
+# 📚 Library Assistant
 
-A Retrieval-Augmented Generation app that answers questions about
-student documents (handbooks, notices, circulars, policies). Embeddings
-run locally and free (`sentence-transformers`); answer generation uses
-**Llama 3 hosted on Groq**, so the app works for anyone visiting the
-public link — no local model server required.
+A Retrieval-Augmented Generation (RAG) chatbot that answers questions about your library's policies, rules, and FAQs — grounded entirely in your own PDF documents. Built with Streamlit, local embeddings, and Groq for fast LLM inference.
 
-## How it works
-1. You upload PDFs in the sidebar.
-2. Text is split into chunks and embedded locally (`sentence-transformers`).
-3. Chunks are stored in a lightweight NumPy vector index.
-4. When you ask a question, the most relevant chunks are retrieved.
-5. Llama 3 (via the Groq API) reads those chunks and writes a grounded
-   answer — it won't make things up outside the documents.
+## Features
+
+- **Upload & index PDFs** — library handbooks, policies, rules, notices, FAQs, and more.
+- **Local, free embeddings** — uses `sentence-transformers/all-MiniLM-L6-v2` via HuggingFace, so no embedding API key is required.
+- **Lightweight vector store** — a simple NumPy-based cosine-similarity store (no compiled dependencies like FAISS, so it installs cleanly on any Python version).
+- **Fast generation via Groq** — retrieved chunks are passed to a Groq-hosted model for grounded, low-latency answers.
+- **Source-cited answers** — every response can be traced back to the original document and page.
+- **Guardrailed responses** — the assistant only answers from the provided context and won't invent policies, deadlines, or numbers.
+
+## How It Works
+
+1. **Load** — PDF documents are loaded and parsed page-by-page.
+2. **Split** — text is split into overlapping chunks (1000 chars, 150 overlap) for better retrieval granularity.
+3. **Embed** — each chunk is embedded locally using a HuggingFace sentence-transformer.
+4. **Store** — embeddings are normalized and stored in an in-memory/on-disk NumPy vector store.
+5. **Retrieve** — on a user question, the top-k most similar chunks are retrieved via cosine similarity.
+6. **Generate** — the question plus retrieved context is sent to a Groq-hosted LLM, which produces a concise, grounded answer.
+
+## Project Structure
+
+```
+.
+├── app.py           # Streamlit UI (upload, index, chat)
+├── rag_core.py       # Core RAG pipeline: loading, splitting, embedding, retrieval, generation
+├── faiss_index/       # Persisted vector store (created after indexing)
+└── README.md
+```
 
 ## Setup
 
-### 1. Get a free Groq API key
-Sign up at https://console.groq.com and create an API key.
+### 1. Clone the repo
 
-- **Running locally:** set it as an environment variable:
-  ```bash
-  export GROQ_API_KEY="your-key-here"     # Windows: set GROQ_API_KEY=your-key-here
-  ```
-- **Deployed on Streamlit Community Cloud:** go to your app ->
-  **Manage app -> Settings -> Secrets** and add:
-  ```toml
-  GROQ_API_KEY = "your-key-here"
-  ```
-
-### 2. Install Python dependencies
 ```bash
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+git clone <your-repo-url>
+cd <your-repo-folder>
 ```
 
-### 3. Run the app
+### 2. Install dependencies
+
+```bash
+pip install streamlit langchain-community langchain-text-splitters langchain-huggingface langchain-groq numpy pypdf
+```
+
+### 3. Add your Groq API key
+
+Get a free key from [console.groq.com](https://console.groq.com/keys), then either:
+
+**Option A — Streamlit secrets** (recommended for Streamlit Cloud):
+
+Create `.streamlit/secrets.toml`:
+
+```toml
+GROQ_API_KEY = "your-key-here"
+```
+
+**Option B — Environment variable:**
+
+```bash
+export GROQ_API_KEY="your-key-here"
+```
+
+### 4. Run the app
+
 ```bash
 streamlit run app.py
 ```
 
-### 4. Use it
-- In the sidebar, upload one or more PDFs (student handbook, exam
-  notice, fee circular, etc.)
-- Click **Build / Rebuild Index**
-- Ask questions in the chat box, e.g.:
-  - "What is the last date to pay semester fees?"
-  - "What is the attendance requirement to sit for exams?"
-  - "How do I apply for a hostel room?"
+## Configuration
 
-The index is saved to `faiss_index/` on disk, so next time you can
-just click **Load Saved Index** instead of re-uploading everything.
+Key settings live at the top of `rag_core.py`:
 
-## Customizing the answers
-Open `rag_core.py` and edit `SYSTEM_PROMPT` — this controls the
-assistant's persona, tone, and rules (e.g. make it stricter, add a
-language preference, make it always mention a contact office, etc.).
+| Setting | Default | Description |
+|---|---|---|
+| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Local HuggingFace embedding model |
+| `OLLAMA_MODEL` | `openai/gpt-oss-120b` | Groq-hosted generation model |
+| `CHUNK_SIZE` | `1000` | Characters per chunk |
+| `CHUNK_OVERLAP` | `150` | Overlap between chunks |
+| `INDEX_DIR` | `faiss_index` | Where the vector store is persisted |
 
-You can also:
-- Swap `OLLAMA_MODEL` in `rag_core.py` to another Groq-hosted model
-  (e.g. `llama-3.3-70b-versatile` for higher quality, or keep
-  `llama-3.1-8b-instant` for speed)
-- Change `CHUNK_SIZE` / `CHUNK_OVERLAP` in `rag_core.py` for how documents are split
-- Change `k` (chunks retrieved) in the Streamlit sidebar slider
+## Usage
 
-## Project structure
-```
-student-rag/
-├── app.py          # Streamlit UI (upload, build index, chat)
-├── rag_core.py      # RAG pipeline: load, chunk, embed, retrieve, generate
-├── requirements.txt
-└── README.md
-```
+1. Upload your library's PDFs (policies, rules, FAQs, notices) from the sidebar.
+2. Wait for indexing to finish — you'll see a chunk/doc count once done.
+3. Ask questions in plain language, e.g. *"What's the fine for a late book return?"* or *"How many books can a student borrow at once?"*
+4. The assistant answers using only the indexed documents, and points you to the admin/library office if the answer isn't in the docs.
 
-## Extending it further
-- Add CSV/Excel student records with `CSVLoader` / `UnstructuredExcelLoader`
-- Add user authentication so students only see their own record-based answers
-- Add a "clear index" button and multi-session support
-- Swap FAISS for Chroma or a hosted vector DB if you need persistence across
-  many users
+## Troubleshooting
+
+**`groq.NotFoundError` / `model_not_found`**
+The model set in `OLLAMA_MODEL` has been decommissioned by Groq. Check [Groq's supported models](https://console.groq.com/docs/models) and update the value in `rag_core.py` (e.g. to `openai/gpt-oss-120b` or `openai/gpt-oss-20b`).
+
+**`GROQ_API_KEY is not set`**
+Add your key to `.streamlit/secrets.toml` or as an environment variable (see Setup step 3).
+
+**Slow first run**
+The first query downloads and loads the local embedding model — subsequent runs are much faster.
+
+## Tech Stack
+
+- [Streamlit](https://streamlit.io/) — UI
+- [LangChain](https://www.langchain.com/) — document loading & text splitting
+- [HuggingFace sentence-transformers](https://www.sbert.net/) — local embeddings
+- [Groq](https://groq.com/) — LLM inference
+- NumPy — vector similarity search
+
+## License
+
+Add your license here.
