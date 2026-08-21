@@ -1,6 +1,6 @@
 """
 Core RAG (Retrieval-Augmented Generation) logic for the
-Student Management Assistant.
+Library Management Assistant.
 
 Pipeline:
 1. Load PDF documents (student handbooks, notices, records, etc.)
